@@ -1,0 +1,143 @@
+
+# TODO:
+# Transformar este procedimento em Puppet
+
+yum install httpd xinetd syslinux tftp-server -y
+
+cd /usr/share/syslinux/
+cp pxelinux.0 menu.c32 memdisk mboot.c32 chain.c32 ldlinux.c32 libutil.c32 /tftpboot/
+
+cat > /etc/xinetd.d/tftp <<EOF
+service tftp
+{
+socket_type             = dgram
+protocol                = udp
+wait                    = yes
+user                    = root
+server                  = /usr/sbin/in.tftpd
+server_args             = -s /tftpboot
+disable                 = no
+per_source              = 11
+cps                     = 100 2
+flags                   = IPv4
+}
+EOF
+
+
+mount -o loop /root/CentOS-7.0-1406-x86_64-DVD.iso /mnt/
+mkdir /tftpboot/centos7_x64
+cp -fr /mnt/* /tftpboot/centos7_x64/
+chmod -R 755 /tftpboot/centos7_x64/
+
+cat > /etc/httpd/conf.d/pxeboot.conf <<EOF
+
+Alias /centos7_x64 /tftpboot/centos7_x64/
+<Directory /tftpboot/centos7_x64>
+Options Indexes FollowSymLinks
+Order Deny,Allow
+Deny from all
+Allow from 127.0.0.1 192.168.1.0/24
+</Directory>
+EOF
+
+
+mkdir /var/lib/tftpboot/pxelinux.cfg
+
+
+
+cat > /tftpboot/pxelinux.cfg/default <<EOF
+
+default menu.c32
+prompt 0
+timeout 300
+ONTIMEOUT local
+
+menu title ########## PXE Boot Menu ##########
+
+label 1
+menu label ^1) Install CentOS 7 i386 with http://mirror.centos.org Repo
+kernel centos7/vmlinuz
+append initrd=centos7/initrd.img method=http://192.168.10.10/repository/centos7-i386/disc1/ devfs=nomount ip=dhcp
+
+label 2
+menu label ^2) Install CentOS 7 x64 with Local Repo
+kernel centos7/vmlinuz
+append initrd=centos7/initrd.img method=ftp://192.168.1.20/pub devfs=nomount
+
+
+label 3
+menu label ^3) Install CentOS 7 x64 with Local Repo using VNC
+kernel centos7/vmlinuz
+append  initrd=centos7/initrd.img method=ftp://192.168.1.20/pub devfs=nomount inst.vnc inst.vncpassword=password
+
+label 4
+menu label ^4) Boot from local drive
+
+EOF
+
+cat > /etc/dhcp/dhcpd.conf <<EOF
+
+# dhcpd.conf
+#
+# Sample configuration file for ISC dhcpd
+#
+
+# option definitions common to all supported networks...
+option domain-name "example.org";
+option domain-name-servers ns1.example.org, ns2.example.org;
+
+default-lease-time 600;
+max-lease-time 7200;
+
+# Use this to enble / disable dynamic dns updates globally.
+ddns-update-style interim;
+#ignore client-updates
+
+# If this DHCP server is the official DHCP server for the local
+# network, the authoritative directive should be uncommented.
+#authoritative;
+
+# Use this to send dhcp log messages to a different log file (you also
+# have to hack syslog.conf to complete the redirection).
+log-facility local7;
+
+# No service will be given on this subnet, but declaring it helps the 
+# DHCP server to understand the network topology.
+
+subnet 10.152.187.0 netmask 255.255.255.0 {
+}
+
+# This is a very basic subnet declaration.
+allow booting;
+allow bootp;
+option option-128 code 128 = string;
+option option-129 code 129 = text;
+
+subnet 192.168.10.0 netmask 255.255.255.0 {
+  range 192.168.10.20 192.168.10.30;
+  option routers rtr-239-0-1.example.org, rtr-239-0-2.example.org;
+
+
+  allow booting;
+allow bootp;
+
+  next-server 192.168.10.10;
+  filename "pxelinux.0";
+}
+
+EOF
+
+
+systemctl restart xinetd
+systemctl restart httpd
+systemctl restart dhcpd
+
+systemctl enable xinetd
+systemctl enable httpd
+systemctl enable dhcpd
+
+systemctl disable firewalld
+systemctl stop firewalld
+
+Disable SELINUX
+
