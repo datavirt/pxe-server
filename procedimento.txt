@@ -4,7 +4,9 @@
 
 yum install httpd xinetd syslinux tftp-server -y
 
+
 cd /usr/share/syslinux/
+mkdir -p /tftpboot/
 cp pxelinux.0 menu.c32 memdisk mboot.c32 chain.c32 ldlinux.c32 libutil.c32 /tftpboot/
 
 cat > /etc/xinetd.d/tftp <<EOF
@@ -101,7 +103,7 @@ ddns-update-style interim;
 # have to hack syslog.conf to complete the redirection).
 log-facility local7;
 
-# No service will be given on this subnet, but declaring it helps the 
+# No service will be given on this subnet, but declaring it helps the
 # DHCP server to understand the network topology.
 
 subnet 10.152.187.0 netmask 255.255.255.0 {
@@ -140,4 +142,3 @@ systemctl disable firewalld
 systemctl stop firewalld
 
 Disable SELINUX
-
